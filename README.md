@@ -114,7 +114,6 @@ detected. We have designed the algorithm in such a way that it
 determines a stable pose of the cucumber after detecting it, based on a
 predefined threshold.
 
-<img src="images/clipboard-945579712.png" width="537" />
 
 ## 🦾TASK
 
