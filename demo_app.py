@@ -2,7 +2,6 @@ import base64
 import glob
 import io
 import os
-import threading
 from pathlib import Path
 
 import numpy as np
@@ -163,17 +162,6 @@ def index():
 @app.get("/health")
 def health():
     return jsonify(status="ok", model_candidate=discover_model() or "yolov8s-worldv2.pt", model_loaded=MODEL is not None, model_source=MODEL_SOURCE, model_error=MODEL_ERROR)
-
-
-def warm_model():
-    try:
-        get_model()
-    except Exception:
-        pass
-
-
-# Bind the HTTP port immediately, then warm the model in the background.
-threading.Thread(target=warm_model, name="model-warmup", daemon=True).start()
 
 
 if __name__ == "__main__":
