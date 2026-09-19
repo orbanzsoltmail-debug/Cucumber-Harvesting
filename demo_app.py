@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 from flask import Flask, jsonify, render_template_string, request
 from PIL import Image, ImageDraw, ImageFont
-from ultralytics import YOLO
+from ultralytics import YOLO, YOLOWorld
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
@@ -15,6 +15,7 @@ app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
 MODEL = None
 MODEL_PATH = None
 MODEL_ERROR = None
+MODEL_SOURCE = None
 
 
 def discover_model():
@@ -30,15 +31,22 @@ def discover_model():
 
 
 def get_model():
-    global MODEL, MODEL_PATH, MODEL_ERROR
+    global MODEL, MODEL_PATH, MODEL_ERROR, MODEL_SOURCE
     if MODEL is not None:
         return MODEL
     MODEL_PATH = discover_model()
-    if not MODEL_PATH:
-        MODEL_ERROR = "Nem találtam .pt YOLO modellt a repositoryban."
-        raise RuntimeError(MODEL_ERROR)
     try:
-        MODEL = YOLO(MODEL_PATH)
+        if MODEL_PATH:
+            MODEL = YOLO(MODEL_PATH)
+            MODEL_SOURCE = "A projekt saját uborkamodellje"
+        else:
+            # The upstream README lists custom weights, but they are not actually
+            # present in the repository. YOLO-World gives us a real, usable
+            # open-vocabulary fallback instead of a non-functional demo.
+            MODEL_PATH = "yolov8s-worldv2.pt"
+            MODEL = YOLOWorld(MODEL_PATH)
+            MODEL.set_classes(["cucumber", "green cucumber", "cucumber fruit"])
+            MODEL_SOURCE = "YOLO-World nyílt szókészletű gyorsmodell"
         return MODEL
     except Exception as exc:
         MODEL_ERROR = f"Modellbetöltési hiba: {exc}"
@@ -133,7 +141,7 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:900px;mar
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "GET":
-        return render_template_string(PAGE, error=MODEL_ERROR, result=None, model_path=MODEL_PATH)
+        return render_template_string(PAGE, error=MODEL_ERROR, result=None, model_path=MODEL_PATH, model_source=MODEL_SOURCE)
     upload = request.files.get("image")
     if not upload or not upload.filename:
         return render_template_string(PAGE, error="Válassz ki egy képet.", result=None), 400
@@ -146,14 +154,14 @@ def index():
         annotated, confirmed, suspected = annotate(image, results[0], visible_percent)
         buf = io.BytesIO(); annotated.save(buf, format="JPEG", quality=91)
         encoded = base64.b64encode(buf.getvalue()).decode("ascii")
-        return render_template_string(PAGE, error=None, result=encoded, total=confirmed + suspected, confirmed=confirmed, suspected=suspected, model_path=MODEL_PATH)
+        return render_template_string(PAGE, error=None, result=encoded, total=confirmed + suspected, confirmed=confirmed, suspected=suspected, model_path=MODEL_PATH, model_source=MODEL_SOURCE)
     except Exception as exc:
         return render_template_string(PAGE, error=str(exc), result=None, model_path=MODEL_PATH), 500
 
 
 @app.get("/health")
 def health():
-    return jsonify(status="ok", model_candidate=discover_model(), model_loaded=MODEL is not None, model_error=MODEL_ERROR)
+    return jsonify(status="ok", model_candidate=discover_model() or "yolov8s-worldv2.pt", model_loaded=MODEL is not None, model_source=MODEL_SOURCE, model_error=MODEL_ERROR)
 
 
 if __name__ == "__main__":
