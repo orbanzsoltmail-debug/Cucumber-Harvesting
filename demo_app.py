@@ -53,6 +53,14 @@ def get_model():
         raise
 
 
+# Load once while the service boots. This avoids a long first photo request and
+# prevents Ultralytics from trying to install YOLO-World dependencies mid-request.
+try:
+    get_model()
+except Exception:
+    pass
+
+
 def dashed_line(draw, points, fill, width=4, dash=12):
     for start, end in zip(points[::2], points[1::2]):
         draw.line([start, end], fill=fill, width=width)
