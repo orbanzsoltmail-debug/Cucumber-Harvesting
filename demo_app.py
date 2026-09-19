@@ -2,6 +2,7 @@ import base64
 import glob
 import io
 import os
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -51,14 +52,6 @@ def get_model():
     except Exception as exc:
         MODEL_ERROR = f"Modellbetöltési hiba: {exc}"
         raise
-
-
-# Load once while the service boots. This avoids a long first photo request and
-# prevents Ultralytics from trying to install YOLO-World dependencies mid-request.
-try:
-    get_model()
-except Exception:
-    pass
 
 
 def dashed_line(draw, points, fill, width=4, dash=12):
@@ -170,6 +163,17 @@ def index():
 @app.get("/health")
 def health():
     return jsonify(status="ok", model_candidate=discover_model() or "yolov8s-worldv2.pt", model_loaded=MODEL is not None, model_source=MODEL_SOURCE, model_error=MODEL_ERROR)
+
+
+def warm_model():
+    try:
+        get_model()
+    except Exception:
+        pass
+
+
+# Bind the HTTP port immediately, then warm the model in the background.
+threading.Thread(target=warm_model, name="model-warmup", daemon=True).start()
 
 
 if __name__ == "__main__":
