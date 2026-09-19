@@ -163,9 +163,11 @@ def index():
     try:
         visible_percent = max(5, min(50, int(request.form.get("visible_percent", "10"))))
         image = Image.open(upload.stream).convert("RGB")
-        image.thumbnail((1600, 1600))
+        image.thumbnail((960, 960))
         model = get_model()
-        results = model.predict(source=np.asarray(image), conf=0.03, iou=0.45, imgsz=960, augment=True, device="cpu", verbose=False)
+        # Keep memory below Render's small-instance limit. Test-time augmentation
+        # at 960 px tripled memory and restarted the worker.
+        results = model.predict(source=np.asarray(image), conf=0.03, iou=0.45, imgsz=640, augment=False, device="cpu", verbose=False)
         annotated, confirmed, suspected = annotate(image, results[0], visible_percent)
         buf = io.BytesIO(); annotated.save(buf, format="JPEG", quality=91)
         encoded = base64.b64encode(buf.getvalue()).decode("ascii")
